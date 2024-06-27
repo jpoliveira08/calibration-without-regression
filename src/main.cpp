@@ -7,9 +7,6 @@
 #define CYCLES (20)
 #define NSAMPLES (OVER_SAMPLE_RATIO * CYCLES) // 321
 
-#define ADC_BITS 12
-#define ADC_COUNTS (1 << ADC_BITS)
-
 #define VOLTAGE_ADC_PIN (34)
 #define CURRENT_ADC_PIN (35)
 
@@ -44,6 +41,9 @@ double sumVoltageToSend = 0.0;
 double sumCurrentToSend = 0.0;
 double sumRealPowerToSend = 0.0;
 
+const float voltageCalibration = 282.5;
+const float currentCalibration = 30.5;
+
 void setup() {
   Serial.begin(115200);
   setupMeasurement();
@@ -51,7 +51,7 @@ void setup() {
 
 void loop() {
   measurements = makeMeasurement();
-  if (countRmsMeasurements < 3) {
+  if (countRmsMeasurements < 100) {
     sumVoltageToSend += measurements.vrms;
     sumCurrentToSend += measurements.irms;
     sumRealPowerToSend += measurements.realPower;
@@ -62,13 +62,13 @@ void loop() {
     return;
   }
   Serial.print("Vrms: ");
-  Serial.print(sumVoltageToSend / 3.0, 3);
+  Serial.print(sumVoltageToSend / 100.0, 3);
   Serial.print(" (V); Irms: ");
-  Serial.print(sumCurrentToSend / 3.0, 3);
+  Serial.print(sumCurrentToSend / 100.0, 3);
   Serial.print(" (I); Prms: ");
-  Serial.print(sumRealPowerToSend / 3.0, 3);
+  Serial.print(sumRealPowerToSend / 100.0, 3);
   Serial.print(" ");
-  float powerFactorConverted = (sumRealPowerToSend / 3.0) / (sumApparentPower / 3.0);
+  float powerFactorConverted = (sumRealPowerToSend / 100.0) / (sumApparentPower / 100.0);
   Serial.println(powerFactorConverted);
 
   sumVoltageToSend = 0;
@@ -119,22 +119,10 @@ void readAnalogSamples() {
 }
 
 struct ElectricalMeasurements measureRms(int* voltageSamples, int* currentSamples, int nsamples) {
-  float numberOfTurnsCT = 2.0;
   struct ElectricalMeasurements eletricMeasurements;
-  // int32_t sumVoltageSamples = 0;
-  // int32_t sumCurrentSamples = 0;
 
-  // for (int i = 0; i < nsamples; i++) {
-  //   Serial.print(voltageSamples[i]);
-  //   Serial.print(" ");
-  //   Serial.println(currentSamples[i]);
-  //   sumVoltageSamples += voltageSamples[i];
-  //   sumCurrentSamples += currentSamples[i];
-  // }
   int offsetVoltage = 1851;
   int offsetCurrent = 1848;
-  // int voltageMean = (int)(sumVoltageSamples / (int32_t)(nsamples));
-  // int currentMean = (int)(sumCurrentSamples / (int32_t)(nsamples));
 
   float sumVoltage = 0;
   float sumCurrent = 0;
@@ -143,10 +131,8 @@ struct ElectricalMeasurements measureRms(int* voltageSamples, int* currentSample
     int y_voltageNoOffset = voltageSamples[i] - offsetVoltage;
     int y_currentNoOffset = currentSamples[i] - offsetCurrent;
 
-    float y_voltage = ((float)y_voltageNoOffset) * (282.5) * (3.3/4096.0);
-    float y_current = ((float)y_currentNoOffset) * (30.5) * (3.3/4096.0);
-
-    // y_current = y_current / numberOfTurnsCT;
+    float y_voltage = ((float)y_voltageNoOffset) * voltageCalibration * (3.3/4096.0);
+    float y_current = ((float)y_currentNoOffset) * currentCalibration * (3.3/4096.0);
 
     float y_instantaneousPower = y_voltage * y_current;
   
@@ -164,7 +150,6 @@ struct ElectricalMeasurements measureRms(int* voltageSamples, int* currentSample
 
   float Vrms = vrmsSquared;
   float Irms = irmsSquared;
-
   float realPower = ym_realPower;
 
   eletricMeasurements.vrms = Vrms;
